@@ -1,0 +1,14 @@
+# Sample Facts
+parent(john, mary)
+parent(mary, alice)
+parent(alice, bob)
+
+# Sample Rules
+parent(x, y) => ancestor(x, y)
+ancestor(x, y) and parent(y, z) => ancestor(x, z)
+
+# Sample Queries
+ancestor(john, alice)
+ancestor(john, bob)
+ancestor(mary, bob)
+ancestor(alice, john)  # Should be false
