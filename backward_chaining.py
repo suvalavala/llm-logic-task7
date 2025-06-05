@@ -172,3 +172,40 @@ def run_tests():
 
 if __name__ == "__main__":
     run_tests()
+
+
+
+"""
+exp output
+=== Backward Chaining Test Results ===
+
+Query: ancestor(john, alice)
+Result: True
+
+Query: ancestor(john, bob)
+Result: True
+
+Query: ancestor(john, charlie)
+Result: True
+
+Query: ancestor(alice, john)
+Result: False
+
+Query: ancestor(susan, jerry)
+Result: True
+
+Query: father(john, mary)
+Result: True
+
+Query: mother(mary, alice)
+Result: True
+
+Query: father(mary, alice)
+Result: False
+
+Query: related(alice, bob)
+Result: True
+
+Query: father(john, alice)
+Result: False
+"""
