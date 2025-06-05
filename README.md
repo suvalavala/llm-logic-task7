@@ -35,9 +35,6 @@ Run the inference engine using:
 python3 backward_chaining.py
 ```
 
-The script includes a sample knowledge base and a test query.
-
----
 
 Query: ancestor(john, alice)
 Result: True
