@@ -1,79 +1,174 @@
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Set
+import re
 
-
+# --- Extended  Facts and Rules ---
 facts = [
     "parent(john, mary)",
-    "parent(mary, alice)"
+    "parent(mary, alice)",
+    "parent(alice, bob)",
+    "parent(bob, charlie)",
+    "parent(susan, tom)",
+    "parent(tom, jerry)",
+    "male(john)",
+    "male(bob)", 
+    "male(charlie)",
+    "male(tom)",
+    "male(jerry)",
+    "female(mary)",
+    "female(alice)",
+    "female(susan)"
 ]
 
 rules = [
-    ("parent(x, y)", "ancestor(x, y)"),
-    ("ancestor(x, y) and parent(y, z)", "ancestor(x, z)")
+    ("parent(X, Y)", "ancestor(X, Y)"),
+    ("ancestor(X, Y) and parent(Y, Z)", "ancestor(X, Z)"),
+    ("parent(X, Y) and male(X)", "father(X, Y)"),
+    ("parent(X, Y) and female(X)", "mother(X, Y)"),
+    ("parent(X, Y) and parent(X, Z) and Y != Z", "sibling(Y, Z)"),
+    ("ancestor(X, Y) and ancestor(X, Z) and Y != Z", "related(Y, Z)")
 ]
 
+# ---  Helpers ---
 
 def parse_predicate(pred: str) -> Tuple[str, List[str]]:
-    name, args = pred.split("(")
-    args = args.strip(")").split(",")
+    """Parse predicate into name and arguments."""
+    name, args = pred.split("(", 1)
+    args = args.rstrip(")").split(",")
     return name.strip(), [a.strip() for a in args]
 
-def unify(goal: str, fact: str) -> Optional[Dict[str, str]]:
-    g_name, g_args = parse_predicate(goal)
-    f_name, f_args = parse_predicate(fact)
-    if g_name != f_name or len(g_args) != len(f_args):
-        return None
-    subst = {}
-    for g, f in zip(g_args, f_args):
-        if g.islower():  # variable
-            subst[g] = f
-        elif g != f:
-            return None
-    return subst
+def is_variable(term: str) -> bool:
+    """Check if term is a variable (starts with uppercase or is single lowercase in some contexts)."""
+    return term[0].isupper() or len(term) == 1
 
-def apply_subst(pred: str, subst: Dict[str, str]) -> str:
+def unify(term1: str, term2: str, subst: Dict[str, str] = None) -> Optional[Dict[str, str]]:
+    """Unify two terms with existing substitution."""
+    if subst is None:
+        subst = {}
+    
+    # Apply existing substitutions
+    term1 = subst.get(term1, term1)
+    term2 = subst.get(term2, term2)
+    
+    if term1 == term2:
+        return subst
+    elif is_variable(term1):
+        new_subst = subst.copy()
+        new_subst[term1] = term2
+        return new_subst
+    elif is_variable(term2):
+        new_subst = subst.copy()
+        new_subst[term2] = term1
+        return new_subst
+    else:
+        return None
+
+def unify_predicates(pred1: str, pred2: str) -> Optional[Dict[str, str]]:
+    """Unify two predicates."""
+    try:
+        name1, args1 = parse_predicate(pred1)
+        name2, args2 = parse_predicate(pred2)
+        
+        if name1 != name2 or len(args1) != len(args2):
+            return None
+        
+        subst = {}
+        for arg1, arg2 in zip(args1, args2):
+            subst = unify(arg1, arg2, subst)
+            if subst is None:
+                return None
+        
+        return subst
+    except:
+        return None
+
+def apply_substitution(pred: str, subst: Dict[str, str]) -> str:
+    """Apply substitution to predicate."""
     name, args = parse_predicate(pred)
-    new_args = [subst.get(a, a) for a in args]
+    new_args = [subst.get(arg, arg) for arg in args]
     return f"{name}({', '.join(new_args)})"
 
-def merge_subst(s1: Dict[str, str], s2: Dict[str, str]) -> Optional[Dict[str, str]]:
-    result = s1.copy()
-    for k, v in s2.items():
-        if k in result and result[k] != v:
-            return None
-        result[k] = v
-    return result
+def get_variables(pred: str) -> Set[str]:
+    """Get all variables in a predicate."""
+    _, args = parse_predicate(pred)
+    return {arg for arg in args if is_variable(arg)}
 
-# Backward Chaining Logic 
+# --- BCL---
 
-def bc_ask(query: str, facts: List[str], rules: List[Tuple[str, str]], visited=None) -> bool:
+def bc_ask(query: str, facts: List[str], rules: List[Tuple[str, str]], 
+           subst: Dict[str, str] = None, visited: Set[str] = None) -> bool:
+    """
+    Backward chaining ask with proper variable handling.
+    """
+    if subst is None:
+        subst = {}
     if visited is None:
         visited = set()
-    if query in visited:
+    
+    # Apply current substitution to query
+    ground_query = apply_substitution(query, subst)
+    
+    # Prevent infinite recursion
+    if ground_query in visited:
         return False
-    visited.add(query)
-
-    # Check if query directly matches any fact
+    visited.add(ground_query)
+    
+    # Check if query matches any fact
     for fact in facts:
-        if unify(query, fact):
+        if unify_predicates(ground_query, fact) is not None:
             return True
-
-    for body, head in rules:
-        head_subst = unify(query, head)
-        if head_subst is None:
+    
+    # Try to prove using rules
+    for rule_body, rule_head in rules:
+        # Try to unify query with rule head
+        head_unification = unify_predicates(ground_query, rule_head)
+        if head_unification is None:
             continue
-        sub_goals = [s.strip() for s in body.split("and")]
-        if all(bc_ask(apply_subst(sub_goal, head_subst), facts, rules, visited.copy()) for sub_goal in sub_goals):
+        
+        # Parse rule body (handle conjunctions)
+        if " and " in rule_body:
+            subgoals = [goal.strip() for goal in rule_body.split(" and ")]
+        else:
+            subgoals = [rule_body.strip()]
+        
+        # Apply head unification to all subgoals
+        instantiated_subgoals = []
+        for subgoal in subgoals:
+            # Skip inequality constraints for now (simplified)
+            if "!=" in subgoal:
+                continue
+            instantiated_subgoals.append(apply_substitution(subgoal, head_unification))
+        
+        # Try to prove all subgoals
+        if all(bc_ask(subgoal, facts, rules, head_unification, visited.copy()) 
+               for subgoal in instantiated_subgoals):
             return True
-
+    
     return False
 
+# --- Few Tests ---
+
+def run_tests():
+    """Run comprehensive tests."""
+    test_queries = [
+        "ancestor(john, alice)",      # True
+        "ancestor(john, bob)",        # True  
+        "ancestor(john, charlie)",    # True
+        "ancestor(alice, john)",      # False
+        "ancestor(susan, jerry)",     # True
+        "father(john, mary)",         # True
+        "mother(mary, alice)",        # True
+        "father(mary, alice)",        # False
+        "related(alice, bob)",        # Should be True (both descended from john)
+        "father(john, alice)"         # False
+    ]
+    
+    print("=== Backward Chaining Test Results ===\n")
+    
+    for query in test_queries:
+        result = bc_ask(query, facts, rules)
+        print(f"Query: {query}")
+        print(f"Result: {result}")
+        print()
 
 if __name__ == "__main__":
-    query = "ancestor(john, alice)"
-    result = bc_ask(query, facts, rules)
-    print(f"Query: {query}")
-    print("Result:", result)
-
-# exp output
-# Query: ancestor(john, alice)
-# Result: True
+    run_tests()
