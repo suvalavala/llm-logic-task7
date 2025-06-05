@@ -34,10 +34,3 @@ Run the inference engine using:
 ```bash
 python3 backward_chaining.py
 ```
-
-
-Query: ancestor(john, alice)
-Result: True
-```
-
-
