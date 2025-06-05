@@ -1,7 +1,7 @@
 from typing import List, Tuple, Dict, Optional, Set
 import re
 
-#-- Extended  Facts and Rules ---
+#-- Extended  Facts and Rules 
 facts = [
     "parent(john, mary)",
     "parent(mary, alice)",
