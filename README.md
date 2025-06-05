@@ -39,15 +39,6 @@ The script includes a sample knowledge base and a test query.
 
 ---
 
-## Example
-
-Query:
-```
-ancestor(john, alice)
-```
-
-Expected Output:
-```
 Query: ancestor(john, alice)
 Result: True
 ```
